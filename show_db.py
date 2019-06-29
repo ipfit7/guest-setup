@@ -6,7 +6,7 @@ def get_patient_history():
     querry = """select patients.firstName, patients.lastName, behandelgeschiedenis.behandelID,
     behandelingen.behandelDesc, behandelgeschiedenis.treatmentDate from patients inner join 
     behandelgeschiedenis on patients.bsn = behandelgeschiedenis.patientID inner join behandelingen 
-    on behandelingen.behandelID = behandelgeschiedenis.behandelID;"""
+    on behandelingen.behandelID = behandelgeschiedenis.behandelID order by treatmentDate desc;"""
     cursor.execute(querry)
     for entries in cursor:
         print(entries)
