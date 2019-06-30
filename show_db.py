@@ -11,6 +11,22 @@ def get_patient_history():
     cursor.execute(querry)
     for entries in cursor:
         print(entries)
+    
+def get_accounting_data(start_year, end_year):
+    db = MySQLdb.connect(host='127.0.0.1', user='root', database='boekhouding')
+    cursor = db.cursor()
+    print("\n(ID, inkomsten, uitgaven, btw, inkomsten_belasting, kwartaal, inkomst_datum)")
+    for year in range(int(start_year), int(end_year) + 1):
+        querry = "select * from {0} order by inkomst_datum asc;".format("Y" + str(year))
+        cursor.execute(querry)
+        for entries in cursor:
+            print(entries)
 
 if __name__ == "__main__":
-    get_patient_history()
+    choice = input("Select an option:\n\n[1] Get patient history\n[2] Get accounting data\n\nChoice: ")
+    if choice == "1":
+        get_patient_history()
+    elif choice == "2":
+        start_year = input("First year in desired range: ")
+        end_year = input("Last year in desired range: ")
+        get_accounting_data(start_year, end_year)
