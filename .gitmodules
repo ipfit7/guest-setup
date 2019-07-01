@@ -1,0 +1,3 @@
+[submodule "dummy-data"]
+	path = dummy-data
+	url = https://github.com/ipfit7/dummy-data.git
