@@ -1,0 +1,5 @@
+# Ignore generated files
+*.docx
+*.csv
+*.txt
+*.zip
