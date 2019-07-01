@@ -1,6 +1,6 @@
 gwenview
 mysql-client
-mysql-server
+mariadb-server
 mysql-workbench
 p7zip-full
 readpst
