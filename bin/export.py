@@ -128,7 +128,7 @@ def zip_all():
     zip_files(all_files)
     write_hashes(hash_file("export.zip"))
 
-def del_all():
+def move_all():
     shutil.move("export.zip", "/home/{0}/Desktop/export.zip".format(os.environ['USER']))
     shutil.move("hashes.txt", "/home/{0}/Desktop/hashes.txt".format(os.environ['USER']))
 
@@ -155,7 +155,7 @@ if __name__ == "__main__":
                 get_mails(lastName=lastname)
         elif choice == "6":
             zip_all()
-            del_all()
+            move_all()
             exit()
         else:
             print("Error in input!")
