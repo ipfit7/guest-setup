@@ -5,6 +5,8 @@ import csv
 import os
 import shutil
 import hashlib
+import mailbox
+import glob
 
 def get_patient_history():
     db = MySQLdb.connect(host='127.0.0.1', user='root', database='patientinfo')
@@ -15,20 +17,31 @@ def get_patient_history():
         behandelgeschiedenis.behandelID inner join tandartsen on tandartsen.dentistID = 
         behandelgeschiedenis.dentistID order by treatmentDate desc;"""
     cursor.execute(querry)
-    for entries in cursor:
-        print(entries)
+    with open("behandelgeschiedenis.csv", "w") as f:
+        writer = csv.writer(f)
+        writer.writerow(["lastName", "behandelDesc", "treatmentDate", "dentistLastName"])
+        writer.writerows(cursor)
+    write_hashes(hash_file("behandelgeschiedenis.csv"))
     
 def get_accounting_data(start_year, end_year):
     db = MySQLdb.connect(host='127.0.0.1', user='root', database='boekhouding')
     cursor = db.cursor()
-    for year in range(int(start_year), int(end_year) + 1):
-        querry = "select * from {0} order by inkomst_datum asc;".format("Y" + str(year))
-        cursor.execute(querry)
-    with open("boekhouding.csv", "w") as f:
-        writer = csv.writer(f)
-        writer.writerows(cursor)
+    try:
+        for year in range(int(start_year), int(end_year) + 1):
+            querry = "select * from {0} order by inkomst_datum asc;".format("Y" + str(year))
+            cursor.execute(querry)
+    except MySQLdb._exceptions.ProgrammingError:
+        print("Invalid range!")
+        exit()
+    try:
+        with open("boekhouding.csv", "w") as f:
+            writer = csv.writer(f)
+            writer.writerow(["ID", "inkomsten", "uitgaven", "btw", "inkomsten_belasting", "kwartaal", "inkomst_datum"])
+            writer.writerows(cursor)
+    except TypeError:
+        print("Invalid range!")
+        exit()
     write_hashes(hash_file("boekhouding.csv"))
-    zip_files(["boekhouding.csv"], "boekhouding")
 
 def get_personal_file(lastName):
     db = MySQLdb.connect(host='127.0.0.1', user='root', database='patientinfo')
@@ -43,14 +56,19 @@ def get_personal_file(lastName):
         where patients.lastName = "{0}" order by treatmentDate desc;""".format(lastName)
     cursor.execute(querry)
     entries = [n for n in cursor]
-    dossier = [f for f in os.listdir(folder) if str(entries[0][0]) in f]
+    try:
+        dossier = [f for f in os.listdir(folder) if str(entries[0][0]) in f]
+    except IndexError:
+        print("Person does not exist!")
+        exit()
     shutil.copyfile("{0}/{1}".format(folder, dossier[0]), "./{0}".format(dossier[0]))
     with open("{0}".format(dossier[0].replace(".docx", ".csv")), "w") as export:
         writer = csv.writer(export)
+        writer.writerow(["patientID", "firstName", "lastName", "address", "placeOfResidence", "dateOfBirth", "bsn", "behandelDesc", "treatmentDate"
+        , "dentistLastName"])
         writer.writerows(entries)
     write_hashes(hash_file(dossier[0], lastName))
     write_hashes(hash_file(dossier[0].replace(".docx", ".csv"), lastName))
-    zip_files([dossier[0].replace(".docx", ".csv"), dossier[0]], lastName)
 
 def hash_file(file, lastname=None):
     file_hash = ""
@@ -76,7 +94,6 @@ def zip_files(files: [], lastname=None):
         lastname = "export"
     libarchive.public.create_file("{0}.zip".format(lastname), libarchive.constants.ARCHIVE_FORMAT_ZIP,
         files=files)
-    write_hashes(hash_file("{0}.zip".format(lastname)))
 
 def get_personel_file():
     db = MySQLdb.connect(host='127.0.0.1', user='root', database='patientinfo')
@@ -85,20 +102,61 @@ def get_personel_file():
     cursor.execute(querry)
     with open("personeelsbestand.csv", "w") as f:
         writer = csv.writer(f)
+        writer.writerow(["ID", "dentistID", "dentistFirstName", "dentistMiddleName", "dentistLastName", "specialty", "salary"])
         writer.writerows(cursor)
     write_hashes(hash_file("personeelsbestand.csv"))
-    zip_files(["personeelsbestand.csv"])
+
+def get_mails(lastName=None):
+    messages = 0
+    with open("emails.txt", "w") as f:
+        if not lastName:
+            for message in mailbox.mbox("./dummy-data/data/mail/mailbox.mbox"):
+                f.write(str(message))
+                messages += 1
+        else:
+            for message in mailbox.mbox("./dummy-data/data/mail/mailbox.mbox"):
+                if lastName in message["From"] or lastName in message["To"]:
+                    f.write(str(message))
+                    messages += 1
+    if messages == 0:
+        print("Person does not exist!")
+        exit()
+    write_hashes(hash_file("emails.txt", "emails"))
+
+def zip_all():
+    all_files = glob.glob("emails.txt") + glob.glob("*.docx") + glob.glob("*.csv")
+    zip_files(all_files)
+    write_hashes(hash_file("export.zip"))
+
+def del_all():
+    shutil.move("export.zip", "/home/{0}/Desktop/export.zip".format(os.environ['USER']))
+    shutil.move("hashes.txt", "/home/{0}/Desktop/hashes.txt".format(os.environ['USER']))
 
 if __name__ == "__main__":
-    choice = input("Select an option:\n\n[1] Get patient history\n[2] Get accounting data\n[3] Get patient file\n[4] Get personel file\n\nChoice: ")
-    if choice == "1":
-        get_patient_history()
-    elif choice == "2":
-        start_year = input("First year in desired range: ")
-        end_year = input("Last year in desired range: ")
-        get_accounting_data(start_year, end_year)
-    elif choice == "3":
-        lastName = input("Enter last name: ")
-        get_personal_file(lastName)
-    elif choice == "4":
-        get_personel_file()
+    while True:
+        choice = input("Select an option:\n\n[1] Get patient history\n[2] Get accounting data\n[3] Get patient file\n[4] Get personel file\n[5] Get emails\n[6] Compress all files and exit\n\nChoice: ")
+        if choice == "1":
+            get_patient_history()
+        elif choice == "2":
+            start_year = input("First year in desired range: ")
+            end_year = input("Last year in desired range: ")
+            get_accounting_data(start_year, end_year)
+        elif choice == "3":
+            lastName = input("Enter last name: ")
+            get_personal_file(lastName)
+        elif choice == "4":
+            get_personel_file()
+        elif choice == "5":
+            typeChoice = input("\n[1] Get all mails\n[2] Get mails from a person\n\nChoice: ")
+            if typeChoice == "1":
+                get_mails()
+            elif typeChoice == "2":
+                lastname = input("Enter last name: ")
+                get_mails(lastName=lastname)
+        elif choice == "6":
+            zip_all()
+            del_all()
+            exit()
+        else:
+            print("Error in input!")
+            continue
