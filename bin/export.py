@@ -7,6 +7,7 @@ import shutil
 import hashlib
 import mailbox
 import glob
+import logging
 
 def get_patient_history():
     db = MySQLdb.connect(host='127.0.0.1', user='root', database='patientinfo')
@@ -17,10 +18,12 @@ def get_patient_history():
         behandelgeschiedenis.behandelID inner join tandartsen on tandartsen.dentistID = 
         behandelgeschiedenis.dentistID order by treatmentDate desc;"""
     cursor.execute(querry)
+    log("executed querry: {0}".format(querry))
     with open("behandelgeschiedenis.csv", "w") as f:
         writer = csv.writer(f)
         writer.writerow(["lastName", "behandelDesc", "treatmentDate", "dentistLastName"])
         writer.writerows(cursor)
+    log("Wrote patient history to 'behandelgeschiedenis.csv'")
     write_hashes(hash_file("behandelgeschiedenis.csv"))
     
 def get_accounting_data(start_year, end_year):
@@ -30,6 +33,7 @@ def get_accounting_data(start_year, end_year):
         for year in range(int(start_year), int(end_year) + 1):
             querry = "select * from {0} order by inkomst_datum asc;".format("Y" + str(year))
             cursor.execute(querry)
+            log("Executed querry {0}".format(querry))
     except MySQLdb._exceptions.ProgrammingError:
         print("Invalid range!")
         exit()
@@ -38,6 +42,7 @@ def get_accounting_data(start_year, end_year):
             writer = csv.writer(f)
             writer.writerow(["ID", "inkomsten", "uitgaven", "btw", "inkomsten_belasting", "kwartaal", "inkomst_datum"])
             writer.writerows(cursor)
+            log("Wrote accounting data to 'boekhouding.csv'")
     except TypeError:
         print("Invalid range!")
         exit()
@@ -55,6 +60,7 @@ def get_personal_file(lastName):
         behandelgeschiedenis.behandelID inner join tandartsen on tandartsen.dentistID = behandelgeschiedenis.dentistID 
         where patients.lastName = "{0}" order by treatmentDate desc;""".format(lastName)
     cursor.execute(querry)
+    log("Executed querry {0}".format(querry))
     entries = [n for n in cursor]
     try:
         dossier = [f for f in os.listdir(folder) if str(entries[0][0]) in f]
@@ -62,6 +68,7 @@ def get_personal_file(lastName):
         print("Person does not exist!")
         exit()
     shutil.copyfile("{0}/{1}".format(folder, dossier[0]), "./{0}".format(dossier[0]))
+    log("Copied {0} to working directory".format(dossier[0]))
     with open("{0}".format(dossier[0].replace(".docx", ".csv")), "w") as export:
         writer = csv.writer(export)
         writer.writerow(["patientID", "firstName", "lastName", "address", "placeOfResidence", "dateOfBirth", "bsn", "behandelDesc", "treatmentDate"
@@ -83,6 +90,7 @@ def hash_file(file, lastname=None):
             sha1.update(data)
             md5.update(data)
     file_hash = "SHA1: {0}\t{1}\nMD5: {2}\t{3}\n".format(sha1.hexdigest(), file, md5.hexdigest(), file)
+    log("Hashed '{0}' and added it to hashes.txt".format(file))
     return file_hash
 
 def write_hashes(hash):
@@ -94,12 +102,14 @@ def zip_files(files: [], lastname=None):
         lastname = "export"
     libarchive.public.create_file("{0}.zip".format(lastname), libarchive.constants.ARCHIVE_FORMAT_ZIP,
         files=files)
+    log("Added {0} to export.zip".format([n for n in files]))
 
 def get_personel_file():
     db = MySQLdb.connect(host='127.0.0.1', user='root', database='patientinfo')
     cursor = db.cursor()
     querry = "select * from tandartsen;"
     cursor.execute(querry)
+    log("Executed querry {0}".format(querry))
     with open("personeelsbestand.csv", "w") as f:
         writer = csv.writer(f)
         writer.writerow(["ID", "dentistID", "dentistFirstName", "dentistMiddleName", "dentistLastName", "specialty", "salary"])
@@ -110,10 +120,12 @@ def get_mails(lastName=None):
     messages = 0
     with open("emails.txt", "w") as f:
         if not lastName:
+            log("Getting all email messages")
             for message in mailbox.mbox("./dummy-data/data/mail/mailbox.mbox"):
                 f.write(str(message))
                 messages += 1
         else:
+            log("Getting emails from {0}".format(lastName))
             for message in mailbox.mbox("./dummy-data/data/mail/mailbox.mbox"):
                 if lastName in message["From"] or lastName in message["To"]:
                     f.write(str(message))
@@ -121,6 +133,7 @@ def get_mails(lastName=None):
     if messages == 0:
         print("Person does not exist!")
         exit()
+    log("Added emails to emails.txt")
     write_hashes(hash_file("emails.txt", "emails"))
 
 def zip_all():
@@ -131,6 +144,12 @@ def zip_all():
 def move_all():
     shutil.move("export.zip", "/home/{0}/Desktop/export.zip".format(os.environ['USER']))
     shutil.move("hashes.txt", "/home/{0}/Desktop/hashes.txt".format(os.environ['USER']))
+    log("Moved export.zip and hashes.txt to dekstop")
+
+def log(message):
+    logger = logging.getLogger(__name__)
+    logging.basicConfig(level="INFO", filename="/home/{0}/Desktop/log.txt".format(os.environ['USER']), format="'%(asctime)s %(message)s'")
+    logger.info(message)
 
 if __name__ == "__main__":
     while True:
